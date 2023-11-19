@@ -1,0 +1,3 @@
+## Baselines:
+* BERT
+* BERT + CLIP
