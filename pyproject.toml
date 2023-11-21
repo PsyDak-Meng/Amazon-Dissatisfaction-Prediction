@@ -17,6 +17,9 @@ scipy = "^1.11.4"
 tqdm = "^4.66.1"
 
 
+[tool.poetry.group.dev.dependencies]
+jupyter = "^1.0.0"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
