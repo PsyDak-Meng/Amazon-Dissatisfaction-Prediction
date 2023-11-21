@@ -5,7 +5,7 @@ from typing import NamedTuple, Protocol, Sequence
 
 from numpy.typing import NDArray
 from torch import Tensor
-from torch.nn import Module
+from torch.nn import LeakyReLU, Module
 from torch_geometric.nn import GCNConv
 
 
@@ -49,14 +49,24 @@ class AmazonGraph(Protocol):
         ...
 
 
-class Gnn(Module):
+class GNNCore(Module):
     def __init__(self, in_channels: int, out_channels: int, K: int) -> None:
         self.gcn = GCNConv(in_channels=in_channels, out_channels=in_channels)
         self.out = GCNConv(in_channels=in_channels, out_channels=out_channels)
+        self.relu = LeakyReLU()
         self.K = K
 
     def forward(self, x: Tensor, edge_index: Tensor) -> Tensor:
-        for _ in range(self.K):
-            x = self.gcn(x, edge_index)
-        x = self.out(x)
+        x = self.gcn(x, edge_index)
+        x = self.relu(x)
+        x = self.out(x, edge_index)
         return x
+
+
+class GraphNeuralNetwork:
+    def __init__(self) -> None:
+        self.gnn = GNNCore(in_channels=..., out_channels=...)
+
+    @classmethod
+    def from_graph(cls, graph: AmazonGraph) -> GraphNeuralNetwork:
+        raise NotImplementedError
