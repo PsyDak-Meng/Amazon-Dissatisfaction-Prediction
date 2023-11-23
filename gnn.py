@@ -269,7 +269,7 @@ class Gnn(Module):
 
 if __name__ == "__main__":
     MyGraph = AmazonMyGraph("Fashion_data.json")
-    MyGraph.get_ids(3)
+    MyGraph.get_ids(k=3)
 
     x = Gnn.x_from_graph(MyGraph)
     edge_index = Gnn.edge_index_from_graph(MyGraph)
