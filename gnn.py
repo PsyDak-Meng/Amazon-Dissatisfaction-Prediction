@@ -8,11 +8,18 @@ from typing import Literal, NamedTuple, Protocol, Sequence
 
 import numpy as np
 import torch
+from loguru import logger
 from numpy.typing import NDArray
+from sentence_transformers import SentenceTransformer
 from torch import Tensor
 from torch.nn import LeakyReLU, Linear, Module
 from torch_geometric.nn import GCNConv
+from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+MAX_LEN = 512
+BATCH = 2048
 
 
 class ReviewRecord(NamedTuple):
@@ -21,51 +28,7 @@ class ReviewRecord(NamedTuple):
     user_id: str
 
 
-class AmazonGraph(Protocol):
-    @abc.abstractmethod
-    def get_ids(
-        self, types: Literal["user", "product", "review", None] = None
-    ) -> list[str]:
-        ...
-
-    @abc.abstractmethod
-    def reviews_by_users(self, user_id: str) -> Sequence[ReviewRecord]:
-        ...
-
-    @abc.abstractmethod
-    def reviews_by_products(self, product_id: str) -> Sequence[ReviewRecord]:
-        ...
-
-    @abc.abstractmethod
-    def review(self, review_id: str) -> dict:
-        ...
-
-    @abc.abstractmethod
-    def product(self, product_id: str) -> dict:
-        ...
-
-    @abc.abstractmethod
-    def user(self, user_id: str) -> dict:
-        ...
-
-    @abc.abstractmethod
-    def user_embedding(self, user_id: str) -> NDArray:
-        ...
-
-    @abc.abstractmethod
-    def product_embedding(self, product_id: str) -> NDArray:
-        ...
-
-    @abc.abstractmethod
-    def review_embedding(self, review_id: str) -> NDArray:
-        ...
-
-    @abc.abstractmethod
-    def edges(self) -> list[tuple[str, str]]:
-        ...
-
-
-class AmazonMyGraph(AmazonGraph):
+class AmazonMyGraph:
     def __init__(self, file_path):
         with open(file_path) as f:
             self._data = json.load(f)
@@ -78,8 +41,7 @@ class AmazonMyGraph(AmazonGraph):
         self._users = OrderedDict({})  # user_id -> userName
         self._products = OrderedDict({})  # product_id -> product
 
-        self._tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-        self._model = AutoModel.from_pretrained("bert-base-uncased")
+        self._sentence = SentenceTransformer("all-MiniLM-L6-v2").to(DEVICE)
 
         for i in self._review_ids:
             self._user_ids.append(self._data[str(i)]["reviewerID"])
@@ -109,10 +71,8 @@ class AmazonMyGraph(AmazonGraph):
                 self._products_reversedict[self._data[str(i)]["product"]]
             ].append(self._data[str(i)]["review"])
 
-    def BERT_embed(self, input: str):
-        inputs = self._tokenizer(input, return_tensors="pt")
-        outputs = self._model(**inputs)
-        return outputs
+    def sentence_transform(self, input: list[str]):
+        return self._sentence.encode(input)
 
     def reviews_by_users(self, user_id: str) -> Sequence[ReviewRecord]:
         return self._reviews_by_users[user_id]
@@ -134,7 +94,7 @@ class AmazonMyGraph(AmazonGraph):
         return self.BERT_embed(self.user(user_id))
 
     def product_embedding(self, product_id: str) -> NDArray:
-        return self.BERT_embed(self._products[product_id])
+        return self.BERT_embed(self.product(product_id))
 
     def review_embedding(self, review_id: str) -> NDArray:
         return self.BERT_embed(self.review(review_id))
@@ -150,12 +110,12 @@ class AmazonMyGraph(AmazonGraph):
 
         # gets corresponding values to embed by _ids lists/_products dict values orders; KEEEP ORDER !!!
         user_fn = lambda: self._user_ids
-          # gets userNames from user_id
+        # gets userNames from user_id
         product_fn = lambda: list(
-            self._products.values()
+            self._products.keys()
         )  # gets product names from products dict values
         review_fn = lambda: [
-            self._reviews[str(i)] for i in self._review_ids
+            str(i) for i in self._review_ids
         ]  # gets reviews from review_id
         if types == None:
             return user_fn() + product_fn() + review_fn()
@@ -172,7 +132,8 @@ class AmazonMyGraph(AmazonGraph):
         edges = []
         # get index order for user, product and review; KEEP ORDER !!!
         UPR_cat = (
-            self._user_ids
+            []
+            + self._user_ids
             + [self._products[product] for product in list(self._products.keys())]
             + [self._reviews[review] for review in self._review_ids]
         )
@@ -211,15 +172,28 @@ class Gnn(Module):
         return a
 
     @staticmethod
-    def x_from_graph(graph: AmazonGraph):
+    def x_from_graph(graph: AmazonMyGraph):
         user_ids = graph.get_ids(types="user")
         product_ids = graph.get_ids(types="product")
         review_ids = graph.get_ids(types="review")
 
         # embed by _ids orders
-        user_embeddings = np.array([graph.user_embedding(u) for u in user_ids])
-        product_embeddings = np.array([graph.product_embedding(p) for p in product_ids])
-        review_embeddings = np.array([graph.review_embedding(r) for r in review_ids])
+        user_data = [graph.user(id) for id in user_ids]
+        product_data = [graph.product(id) for id in product_ids]
+        review_data = [graph.review(id) for id in review_ids]
+
+        user_embeddings = [
+            graph.sentence_transform(user_data[idx : idx + BATCH])
+            for idx in tqdm(range(0, len(user_data), BATCH))
+        ]
+        product_embeddings = [
+            graph.sentence_transform(product_data[idx : idx + BATCH])
+            for idx in tqdm(range(0, len(product_data), BATCH))
+        ]
+        review_embeddings = [
+            graph.sentence_transform(review_data[idx : idx + BATCH])
+            for idx in tqdm(range(0, len(review_data), BATCH))
+        ]
 
         user_emb_dim = user_embeddings.shape[1]
         product_emb_dim = product_embeddings.shape[1]
@@ -252,7 +226,7 @@ class Gnn(Module):
         return torch.from_numpy(x).float()
 
     @staticmethod
-    def edge_index_from_graph(graph: AmazonGraph):
+    def edge_index_from_graph(graph: AmazonMyGraph):
         edge_index = []
 
         id_idx = {id: idx for idx, id in enumerate(graph.get_ids())}
@@ -270,8 +244,12 @@ if __name__ == "__main__":
     MyGraph = AmazonMyGraph("Fashion_data.json")
     MyGraph.get_ids(k=3)
 
+    logger.info("creating x")
     x = Gnn.x_from_graph(MyGraph)
+    logger.info("creating edge")
     edge_index = Gnn.edge_index_from_graph(MyGraph)
+    logger.info("creating gnn")
     gnn = Gnn(dims=x.shape[1])
+    logger.info("gnn forward")
     out = gnn(x=x, edge_index=edge_index)
     print(out.shape, x.shape, edge_index.shape)

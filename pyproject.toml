@@ -17,6 +17,9 @@ scipy = "^1.11.4"
 tqdm = "^4.66.1"
 torch-geometric = "^2.4.0"
 parse = "^1.19.1"
+transformers = "^4.35.2"
+loguru = "^0.7.2"
+sentence-transformers = "^2.2.2"
 
 
 [tool.poetry.group.dev.dependencies]
