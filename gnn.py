@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import abc
 import itertools
 import json
@@ -138,19 +137,19 @@ class AmazonMyGraph(AmazonGraph):
     def review_embedding(self, review_id: str) -> NDArray:
         return self.BERT_embed(self.review(review_id))
 
-    # TEST
     def get_ids(
         self, types: Literal["user", "product", "review", None] = None, k: int = -1
-    ):
+    ): 
         if k >= 0:
             print(f"Top {k} ids:")
             print("User ids:", dict(itertools.islice(self._users.items(), k)))
             print("Product ids:", dict(itertools.islice(self._products.items(), k)))
             print("Review ids:", dict(itertools.islice(self._reviews.items(), k)))
 
-        user_fn = lambda: self._user_ids
-        product_fn = lambda: [prod["asin"] for prod in self._products]
-        review_fn = lambda: [str(i) for i in self._review_ids]
+        # gets corresponding values to embed by _ids lists/_products dict values orders; KEEEP ORDER !!!
+        user_fn = lambda: [self._users[user] for user in self._user_ids] # gets userNames from user_id
+        product_fn = lambda: [prod for prod in list(self._products.values())] # gets product names from products dict values
+        review_fn = lambda: [self._reviews[str(i)] for i in self._review_ids] # gets reviews from review_id
         if types == None:
             return [] + user_fn() + product_fn() + review_fn()
         elif types == "user":
@@ -161,6 +160,22 @@ class AmazonMyGraph(AmazonGraph):
             return review_fn()
         else:
             raise ValueError
+        
+    def edges(self):
+        edges = []
+        # get index order for user, product and review; KEEP ORDER !!!
+        UPR_cat = self._user_ids + [self._products[product] for product in list(self._products.keys())] + [self._reviews[review] for review in self._review_ids]
+        UPR = {upr:i for i,upr in enumerate(UPR_cat)}
+
+        # create edge matrix
+        for dp in self._data:
+            # one user for one review
+            edges.append((UPR[dp['review']], UPR[dp['reviewerID']]))
+            # one product for one review
+            edges.append(UPR[dp['review']], UPR[dp['product']])
+        return np.array(edges)
+
+
 
 
 class Gnn(Module):
@@ -192,6 +207,7 @@ class Gnn(Module):
         product_ids = graph.get_ids(types="product")
         review_ids = graph.get_ids(types="review")
 
+        # embed by _ids orders
         user_embeddings = np.array([graph.user_embedding(u) for u in user_ids])
         product_embeddings = np.array([graph.product_embedding(p) for p in product_ids])
         review_embeddings = np.array([graph.review_embedding(r) for r in review_ids])
