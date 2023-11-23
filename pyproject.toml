@@ -21,6 +21,7 @@ parse = "^1.19.1"
 
 [tool.poetry.group.dev.dependencies]
 jupyter = "^1.0.0"
+pytype = "^2023.11.21"
 
 [build-system]
 requires = ["poetry-core"]
