@@ -117,11 +117,10 @@ class AmazonDataset(Dataset):
         reviewID = 0
 
         for i in tqdm(range(len(lines))):
-            reviewID += 1
+
             line = lines[i]
             dp = json.loads(line.decode("utf-8"))
             asin = dp["asin"]
-
             if asin in self._product.keys():
                 if "reviewText" not in dp.keys():
                     continue
@@ -144,8 +143,9 @@ class AmazonDataset(Dataset):
                     else str(len(lines))
                 )
                 rank = int(rank.replace(",", "").replace(" ", ""))
-
-                self._data[str(reviewerID)] = {
+                
+                reviewID += 1
+                self._data[str(reviewID)] = {
                     "reviewerID" : reviewerID,
                     "reviewerName": reviewername,
                     "verified": verified,
