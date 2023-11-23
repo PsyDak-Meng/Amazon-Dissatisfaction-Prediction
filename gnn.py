@@ -59,6 +59,10 @@ class AmazonGraph(Protocol):
     def review_embedding(self, review_id: str) -> NDArray:
         ...
 
+    @abc.abstractmethod
+    def edges(self) -> list[tuple[str, str]]:
+        ...
+
 
 class AmazonMyGraph(AmazonGraph):
     def __init__(self, file_path):
@@ -226,10 +230,13 @@ class Gnn(Module):
     def edge_index_from_graph(graph: AmazonGraph):
         edge_index = []
 
-        for rev_id in graph.get_ids("review"):
-            review = graph.review(rev_id)
-            product = review["asin"]
-            user = review["reviewerName"]
+        id_idx = {id: idx for idx, id in enumerate(graph.get_ids())}
+        edges = graph.edges()
+        for x, y in edges:
+            x_idx = id_idx[x]
+            y_idx = id_idx[y]
+
+            edge_index.append((x_idx, y_idx))
 
         return torch.tensor(edge_index).int()
 
