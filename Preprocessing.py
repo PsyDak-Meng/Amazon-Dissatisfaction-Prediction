@@ -1,8 +1,10 @@
 import gzip
 import json
+import math
 import os
 from pathlib import Path
 
+import parse
 import requests
 from PIL import Image
 from torch.utils.data import Dataset
@@ -118,22 +120,27 @@ class AmazonDataset(Dataset):
             asin = dp["asin"]
 
             if asin in self._product.keys():
-                if "reviewText" in dp.keys():
-                    review = (
-                        dp["reviewText"] + dp["summary"]
-                        if "summary" in dp.keys()
-                        else dp["reviewText"]
-                    )
-                    score = float(dp["overall"])
-                    verified = dp["verified"]
-                    reviewerID = dp["reviewerID"]
-                    reviewername = (
-                        dp["reviewerName"]
-                        if "revieweName" in dp.keys()
-                        else "Anonymous"
-                    )
-                else:
+                if "reviewText" not in dp.keys():
                     continue
+
+                review = (
+                    dp["reviewText"] + dp["summary"]
+                    if "summary" in dp.keys()
+                    else dp["reviewText"]
+                )
+                score = float(dp["overall"])
+                verified = dp["verified"]
+                reviewerID = dp["reviewerID"]
+                reviewername = (
+                    dp["reviewerName"] if "revieweName" in dp.keys() else "Anonymous"
+                )
+                _raw_rank = dp.get("rank")
+                rank = (
+                    parse.parse("{}in{}", _raw_rank)[0]
+                    if _raw_rank is not None
+                    else str(len(lines))
+                )
+                rank = int(rank.replace(",", "").replace(" ", ""))
 
                 self._data[reviewerID] = {
                     "reviewerName": reviewername,
@@ -141,6 +148,7 @@ class AmazonDataset(Dataset):
                     "asin": asin,
                     "score": score,
                     "review": review,
+                    "log_rank": -math.log(rank),
                 }
                 self._data[reviewerID] = merge_dict(
                     self._data[reviewerID], self._product[asin]

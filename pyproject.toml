@@ -16,6 +16,7 @@ numpy = "^1.26.2"
 scipy = "^1.11.4"
 tqdm = "^4.66.1"
 torch-geometric = "^2.4.0"
+parse = "^1.19.1"
 
 
 [tool.poetry.group.dev.dependencies]
