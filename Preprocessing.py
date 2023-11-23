@@ -2,6 +2,7 @@ import gzip
 import json
 import math
 import os
+from argparse import ArgumentParser
 from pathlib import Path
 
 import parse
@@ -176,10 +177,16 @@ class AmazonDataset(Dataset):
 
 
 if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument("--path", default="Dataset/Amazon Review")
+    flags = vars(parser.parse_args())
+
+    path = Path(flags["path"])
     Fashion = AmazonDataset(
-        review_fname="Dataset/Amazon Review/AMAZON_FASHION.json.gz",
-        product_fname="Dataset/Amazon Review/meta_AMAZON_FASHION.json.gz",
+        review_fname=path / "AMAZON_FASHION.json.gz",
+        product_fname=path / "meta_AMAZON_FASHION.json.gz",
         img_loaded=True,
     )
-    with open("Fashion_data.txt", "w") as f:
-        f.write(json.dumps(Fashion._data))
+
+    with open("Fashion_data.json", "w") as f:
+        json.dump(Fashion._data, f, indent=4)
