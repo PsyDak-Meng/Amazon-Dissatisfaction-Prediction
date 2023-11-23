@@ -114,8 +114,10 @@ class AmazonDataset(Dataset):
         f_review = gzip.open(review_fname, "rb")
         # Initialize self._data
         lines = f_review.readlines()
+        reviewID = 0
 
         for i in tqdm(range(len(lines))):
+            reviewID += 1
             line = lines[i]
             dp = json.loads(line.decode("utf-8"))
             asin = dp["asin"]
@@ -143,7 +145,8 @@ class AmazonDataset(Dataset):
                 )
                 rank = int(rank.replace(",", "").replace(" ", ""))
 
-                self._data[reviewerID] = {
+                self._data[str(reviewerID)] = {
+                    "reviewerID" : reviewerID,
                     "reviewerName": reviewername,
                     "verified": verified,
                     "asin": asin,
@@ -151,8 +154,8 @@ class AmazonDataset(Dataset):
                     "review": review,
                     "log_rank": -math.log(rank),
                 }
-                self._data[reviewerID] = merge_dict(
-                    self._data[reviewerID], self._product[asin]
+                self._data[str(reviewID)] = merge_dict(
+                    self._data[str(reviewID)], self._product[asin]
                 )
 
             # TODO: Add matching criteria for dissatisfactory #
