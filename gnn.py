@@ -78,8 +78,8 @@ class AmazonMyGraph(AmazonGraph):
         self._users = OrderedDict({})  # user_id -> userName
         self._products = OrderedDict({})  # product_id -> product
 
-        tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-        model = AutoModel.from_pretrained("bert-base-uncased")
+        self._tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+        self._model = AutoModel.from_pretrained("bert-base-uncased")
 
         for i in self._review_ids:
             self._user_ids.append(self._data[str(i)]["reviewerID"])
@@ -110,8 +110,8 @@ class AmazonMyGraph(AmazonGraph):
             ].append(self._data[str(i)]["review"])
 
     def BERT_embed(self, input: str):
-        inputs = self.tokenizer(input, return_tensors="pt")
-        outputs = self.model(**inputs)
+        inputs = self._tokenizer(input, return_tensors="pt")
+        outputs = self._model(**inputs)
         return outputs
 
     def reviews_by_users(self, user_id: str) -> Sequence[ReviewRecord]:
@@ -149,9 +149,8 @@ class AmazonMyGraph(AmazonGraph):
             print("Review ids:", dict(itertools.islice(self._reviews.items(), k)))
 
         # gets corresponding values to embed by _ids lists/_products dict values orders; KEEEP ORDER !!!
-        user_fn = lambda: [
-            self._users[user] for user in self._user_ids
-        ]  # gets userNames from user_id
+        user_fn = lambda: self._user_ids
+          # gets userNames from user_id
         product_fn = lambda: list(
             self._products.values()
         )  # gets product names from products dict values
