@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 import abc
 import itertools
 import json
+from collections import OrderedDict
 from typing import Literal, NamedTuple, Protocol, Sequence
 
 import numpy as np
@@ -68,13 +70,13 @@ class AmazonMyGraph(AmazonGraph):
         with open(file_path) as f:
             self._data = json.load(f)
 
-        self._reviews_by_users = {}
-        self._reviews_by_products = {}
+        self._reviews_by_users = OrderedDict({})
+        self._reviews_by_products = OrderedDict({})
         self._review_ids = [i for i in range(1, len(list(self._data.keys())) + 1)]
-        self._reviews = {}  # reviewID -> review
+        self._reviews = OrderedDict({})  # reviewID -> review
         self._user_ids = []  # user_id
-        self._users = {}  # user_id -> userName
-        self._products = {}  # product_id -> product
+        self._users = OrderedDict({})  # user_id -> userName
+        self._products = OrderedDict({})  # product_id -> product
 
         tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
         model = AutoModel.from_pretrained("bert-base-uncased")
@@ -139,7 +141,7 @@ class AmazonMyGraph(AmazonGraph):
 
     def get_ids(
         self, types: Literal["user", "product", "review", None] = None, k: int = -1
-    ): 
+    ):
         if k >= 0:
             print(f"Top {k} ids:")
             print("User ids:", dict(itertools.islice(self._users.items(), k)))
@@ -147,11 +149,17 @@ class AmazonMyGraph(AmazonGraph):
             print("Review ids:", dict(itertools.islice(self._reviews.items(), k)))
 
         # gets corresponding values to embed by _ids lists/_products dict values orders; KEEEP ORDER !!!
-        user_fn = lambda: [self._users[user] for user in self._user_ids] # gets userNames from user_id
-        product_fn = lambda: [prod for prod in list(self._products.values())] # gets product names from products dict values
-        review_fn = lambda: [self._reviews[str(i)] for i in self._review_ids] # gets reviews from review_id
+        user_fn = lambda: [
+            self._users[user] for user in self._user_ids
+        ]  # gets userNames from user_id
+        product_fn = lambda: list(
+            self._products.values()
+        )  # gets product names from products dict values
+        review_fn = lambda: [
+            self._reviews[str(i)] for i in self._review_ids
+        ]  # gets reviews from review_id
         if types == None:
-            return [] + user_fn() + product_fn() + review_fn()
+            return user_fn() + product_fn() + review_fn()
         elif types == "user":
             return user_fn()
         elif types == "product":
@@ -160,22 +168,24 @@ class AmazonMyGraph(AmazonGraph):
             return review_fn()
         else:
             raise ValueError
-        
+
     def edges(self):
         edges = []
         # get index order for user, product and review; KEEP ORDER !!!
-        UPR_cat = self._user_ids + [self._products[product] for product in list(self._products.keys())] + [self._reviews[review] for review in self._review_ids]
-        UPR = {upr:i for i,upr in enumerate(UPR_cat)}
+        UPR_cat = (
+            self._user_ids
+            + [self._products[product] for product in list(self._products.keys())]
+            + [self._reviews[review] for review in self._review_ids]
+        )
+        UPR = {upr: i for i, upr in enumerate(UPR_cat)}
 
         # create edge matrix
         for dp in self._data:
             # one user for one review
-            edges.append((UPR[dp['review']], UPR[dp['reviewerID']]))
+            edges.append((UPR[dp["review"]], UPR[dp["reviewerID"]]))
             # one product for one review
-            edges.append(UPR[dp['review']], UPR[dp['product']])
+            edges.append(UPR[dp["review"]], UPR[dp["product"]])
         return np.array(edges)
-
-
 
 
 class Gnn(Module):
@@ -260,3 +270,9 @@ class Gnn(Module):
 if __name__ == "__main__":
     MyGraph = AmazonMyGraph("Fashion_data.json")
     MyGraph.get_ids(3)
+
+    x = Gnn.x_from_graph(MyGraph)
+    edge_index = Gnn.edge_index_from_graph(MyGraph)
+    gnn = Gnn(dims=x.shape[1])
+    out = gnn(x=x, edge_index=edge_index)
+    print(out.shape, x.shape, edge_index.shape)
