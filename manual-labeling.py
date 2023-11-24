@@ -21,7 +21,10 @@ shuffled = random.shuffle(ids)
 
 
 for idx, dat_id in enumerate(ids, start=1):
-    os.system("clear")
+    if os.name == "nt":
+        os.system("cls")
+    else:
+        os.system("clear")
 
     print(
         f"{idx})\n\nDescription:\n"
