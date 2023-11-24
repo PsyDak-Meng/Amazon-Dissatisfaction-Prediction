@@ -5,9 +5,6 @@ import random
 with open("Fashion_data.json") as f:
     data = json.load(f)
 
-ids = list(data.keys())
-
-shuffled = random.shuffle(ids)
 
 LABELLED_FILE = "labelled-helpfulness.json"
 if os.path.exists(LABELLED_FILE):
@@ -15,6 +12,12 @@ if os.path.exists(LABELLED_FILE):
         result = json.load(f)
 else:
     result = {}
+
+ids = set(data.keys())
+ids.difference_update(result.keys())
+
+ids = list(ids)
+shuffled = random.shuffle(ids)
 
 
 for idx, dat_id in enumerate(ids, start=1):
