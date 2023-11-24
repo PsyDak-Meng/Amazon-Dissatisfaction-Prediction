@@ -13,6 +13,7 @@ if os.path.exists(LABELLED_FILE):
 else:
     result = {}
 
+CACHE_SIZE = len(result.keys())
 ids = set(data.keys())
 ids.difference_update(result.keys())
 
@@ -20,7 +21,7 @@ ids = list(ids)
 shuffled = random.shuffle(ids)
 
 
-for idx, dat_id in enumerate(ids, start=1):
+for idx, dat_id in enumerate(ids, start=1 + CACHE_SIZE):
     if os.name == "nt":
         os.system("cls")
     else:
