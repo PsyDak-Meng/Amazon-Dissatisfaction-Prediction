@@ -152,6 +152,7 @@ class AmazonMyGraph:
 
         logger.debug(list(self._products.items())[0])
 
+        scores = []
         # create edge matrix
         for dp in self._data.values():
             assert isinstance(dp, dict), type(dp)
@@ -163,7 +164,9 @@ class AmazonMyGraph:
             edges.append(edge_1)
             # one product for one review
             edges.append(edge_2)
-        return edges
+            scores.append(dp['score'])
+            scores.append(dp['score'])
+        return edges, torch.Tensor(scores)
 
 
 class GnnOut(NamedTuple):
@@ -307,8 +310,8 @@ class Gnn(Module):
         #     y_idx = id_idx[str(y)]
 
         #     edge_index.append((x_idx, y_idx))
-
-        return torch.tensor(graph.edges()).int().T.contiguous()
+        edges, scores = graph.edges()
+        return torch.tensor(edges).int().T.contiguous(), scores
 
 
 if __name__ == "__main__":
@@ -318,7 +321,7 @@ if __name__ == "__main__":
     logger.info("creating x")
     x = Gnn.x_from_graph(MyGraph)
     logger.info("creating edge")
-    edge_index = Gnn.edge_index_from_graph(MyGraph)
+    edge_index, scores = Gnn.edge_index_from_graph(MyGraph)
     logger.info("creating gnn")
     gnn = Gnn(dims=x.shape[1])
     logger.info("gnn forward")
