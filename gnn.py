@@ -36,6 +36,7 @@ class AmazonMyGraph:
             data = json.load(f)
 
         self._data = OrderedDict(sorted(data.items(), key=lambda item: int(item[0])))
+        self.data = self._data
 
         self._reviews_by_users = OrderedDict({})
         self._reviews_by_products = OrderedDict({})
@@ -152,7 +153,6 @@ class AmazonMyGraph:
 
         logger.debug(list(self._products.items())[0])
 
-        scores = []
         # create edge matrix
         for dp in self._data.values():
             assert isinstance(dp, dict), type(dp)
@@ -164,9 +164,8 @@ class AmazonMyGraph:
             edges.append(edge_1)
             # one product for one review
             edges.append(edge_2)
-            scores.append(dp["score"])
-            scores.append(dp["score"])
-        return edges, torch.Tensor(scores)
+
+        return edges
 
 
 class GnnOut(NamedTuple):
@@ -205,6 +204,14 @@ class Gnn(Module):
         user_data = [graph.user(id) for id in user_ids]
         product_data = [graph.product(id) for id in product_ids]
         review_data = [graph.review(id) for id in review_ids]
+
+        scores = [float(graph.data[review_id]['score']) for review_id in review_ids]
+        scores = np.concatenate(
+            np.zeros(len(user_ids)),
+            np.zeros(len(product_ids)),
+            np.array(scores)
+        )
+
 
         CACHE = {}
         _CACHE_PATH = Path("embeddings.pkl")
@@ -287,7 +294,7 @@ class Gnn(Module):
         )
 
         x = np.concatenate([user_embeddings, product_embeddings, review_embeddings])
-        return torch.from_numpy(x).float()
+        return torch.from_numpy(x).float(), scores
 
     @staticmethod
     def edge_index_from_graph(graph: AmazonMyGraph):
@@ -310,8 +317,8 @@ class Gnn(Module):
         #     y_idx = id_idx[str(y)]
 
         #     edge_index.append((x_idx, y_idx))
-        edges, scores = graph.edges()
-        return torch.tensor(edges).int().T.contiguous(), torch.tensor(scores)
+        edges = graph.edges()
+        return torch.tensor(edges).int().T.contiguous()
 
 
 if __name__ == "__main__":
@@ -319,9 +326,9 @@ if __name__ == "__main__":
     MyGraph.get_ids(k=3)
 
     logger.info("creating x")
-    x = Gnn.x_from_graph(MyGraph)
+    x, scores = Gnn.x_from_graph(MyGraph)
     logger.info("creating edge")
-    edge_index, scores = Gnn.edge_index_from_graph(MyGraph)
+    edge_index = Gnn.edge_index_from_graph(MyGraph)
     logger.info("creating gnn")
     gnn = Gnn(dims=x.shape[1])
     logger.info("gnn forward")
