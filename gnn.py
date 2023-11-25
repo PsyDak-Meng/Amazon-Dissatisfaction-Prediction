@@ -44,6 +44,7 @@ class AmazonMyGraph:
         self._user_ids = []  # user_id
         self._users = OrderedDict({})  # user_id -> userName
         self._products = OrderedDict({})  # product_id -> product
+        
 
         self._sentence = SentenceTransformer("all-MiniLM-L6-v2", device=DEVICE)
 
@@ -58,6 +59,7 @@ class AmazonMyGraph:
         self._products_reversedict = {
             value: key for key, value in self._products.items()
         }
+
 
         # reviews_by_users
         for user_id in list(self._users.keys()):
@@ -122,9 +124,9 @@ class AmazonMyGraph:
         # gets corresponding values to embed by _ids lists/_products dict values orders; KEEEP ORDER !!!
         user_fn = lambda: list(self._user_ids)
         # gets userNames from user_id
-        product_fn = lambda: list(self._products.values())
+        product_fn = lambda: list(self._products.keys())
         # gets products from products dict values
-        review_fn = lambda: list(self._reviews.values())
+        review_fn = lambda: list(self._reviews.keys())
         # gets reviews from review_id
 
         if types == None:
@@ -197,9 +199,11 @@ class Gnn(Module):
     @staticmethod
     def x_from_graph(graph: AmazonMyGraph):
         user_ids = graph.get_ids(types="user")
+        product_ids = graph.get_ids(types="product")
+        review_ids = graph.get_ids(types="review")
         user_data = [graph.user(id) for id in user_ids]
-        product_data = graph.get_ids(types="product")
-        review_data = graph.get_ids(types="review")
+        product_data = [graph.user(id) for id in product_ids]
+        review_data = [graph.user(id) for id in review_ids]
 
         CACHE = {}
         _CACHE_PATH = Path("embeddings.pkl")
