@@ -44,7 +44,6 @@ class AmazonMyGraph:
         self._user_ids = []  # user_id
         self._users = OrderedDict({})  # user_id -> userName
         self._products = OrderedDict({})  # product_id -> product
-        
 
         self._sentence = SentenceTransformer("all-MiniLM-L6-v2", device=DEVICE)
 
@@ -59,7 +58,6 @@ class AmazonMyGraph:
         self._products_reversedict = {
             value: key for key, value in self._products.items()
         }
-
 
         # reviews_by_users
         for user_id in list(self._users.keys()):
@@ -202,8 +200,8 @@ class Gnn(Module):
         product_ids = graph.get_ids(types="product")
         review_ids = graph.get_ids(types="review")
         user_data = [graph.user(id) for id in user_ids]
-        product_data = [graph.user(id) for id in product_ids]
-        review_data = [graph.user(id) for id in review_ids]
+        product_data = [graph.product(id) for id in product_ids]
+        review_data = [graph.review(id) for id in review_ids]
 
         CACHE = {}
         _CACHE_PATH = Path("embeddings.pkl")
@@ -290,27 +288,27 @@ class Gnn(Module):
 
     @staticmethod
     def edge_index_from_graph(graph: AmazonMyGraph):
-        edge_index = []
+        # edge_index = []
 
-        ids = graph.get_ids()
-        id_set = set(ids)
+        # ids = graph.get_ids()
+        # id_set = set(ids)
 
-        assert len(ids) == len(set(ids)), {
-            "length": len(ids),
-            "reduced": len(set(ids)),
-        }
+        # assert len(ids) == len(set(ids)), {
+        #     "length": len(ids),
+        #     "reduced": len(set(ids)),
+        # }
 
-        id_idx = {id: idx for idx, id in enumerate(ids)}
-        edges = graph.edges()
-        for x, y in edges:
-            assert x in id_set, x
-            assert y in id_set, y
-            x_idx = id_idx[str(x)]
-            y_idx = id_idx[str(y)]
+        # id_idx = {id: idx for idx, id in enumerate(ids)}
+        # edges = graph.edges()
+        # for x, y in edges:
+        #     assert str(x) in id_set, x
+        #     assert str(y) in id_set, y
+        #     x_idx = id_idx[str(x)]
+        #     y_idx = id_idx[str(y)]
 
-            edge_index.append((x_idx, y_idx))
+        #     edge_index.append((x_idx, y_idx))
 
-        return torch.tensor(edge_index).int()
+        return torch.tensor(graph.edges()).int().T.contiguous()
 
 
 if __name__ == "__main__":
