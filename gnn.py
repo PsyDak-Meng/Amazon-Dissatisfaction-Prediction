@@ -3,7 +3,9 @@ from __future__ import annotations
 import abc
 import itertools
 import json
+import pickle
 from collections import OrderedDict
+from pathlib import Path
 from typing import Literal, NamedTuple, Protocol, Sequence
 
 import numpy as np
@@ -19,7 +21,7 @@ from transformers import AutoModel, AutoTokenizer
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 MAX_LEN = 512
-BATCH = 2048
+BATCH = 4096
 
 
 class ReviewRecord(NamedTuple):
@@ -31,7 +33,9 @@ class ReviewRecord(NamedTuple):
 class AmazonMyGraph:
     def __init__(self, file_path):
         with open(file_path) as f:
-            self._data = json.load(f)
+            data = json.load(f)
+
+        self._data = OrderedDict(sorted(data.items(), key=lambda item: int(item[0])))
 
         self._reviews_by_users = OrderedDict({})
         self._reviews_by_products = OrderedDict({})
@@ -41,7 +45,7 @@ class AmazonMyGraph:
         self._users = OrderedDict({})  # user_id -> userName
         self._products = OrderedDict({})  # product_id -> product
 
-        self._sentence = SentenceTransformer("all-MiniLM-L6-v2").to(DEVICE)
+        self._sentence = SentenceTransformer("all-MiniLM-L6-v2", device=DEVICE)
 
         for i in self._review_ids:
             self._user_ids.append(self._data[str(i)]["reviewerID"])
@@ -72,7 +76,14 @@ class AmazonMyGraph:
             ].append(self._data[str(i)]["review"])
 
     def sentence_transform(self, input: list[str]):
-        return self._sentence.encode(input)
+        output = self._sentence.encode(input, show_progress_bar=False)
+        # print("sentence transform", output.shape)
+        assert output.ndim == 2, output.shape
+        assert (
+            output.shape[1] == self._sentence.get_sentence_embedding_dimension()
+        ), output.shape
+        assert output.shape[0] == len(input), output.shape
+        return output
 
     def reviews_by_users(self, user_id: str) -> Sequence[ReviewRecord]:
         return self._reviews_by_users[user_id]
@@ -128,24 +139,37 @@ class AmazonMyGraph:
         else:
             raise ValueError
 
-    def edges(self):
+    def edges(self) -> list:
         edges = []
         # get index order for user, product and review; KEEP ORDER !!!
         UPR_cat = (
             []
             + self._user_ids
-            + [self._products[product] for product in list(self._products.keys())]
-            + [self._reviews[review] for review in self._review_ids]
+            # + [self._products[product] for product in list(self._products.keys())]
+            + list(self._products.keys())
+            + [self._reviews[str(review)] for review in self._review_ids]
         )
         UPR = {upr: i for i, upr in enumerate(UPR_cat)}
 
+        logger.debug(list(self._products.items())[0])
+
         # create edge matrix
-        for dp in self._data:
+        for dp in self._data.values():
+            assert isinstance(dp, dict), type(dp)
+
+            edge_1 = UPR[dp["review"]], UPR[dp["reviewerID"]]
+            edge_2 = UPR[dp["review"]], UPR[dp["product"]]
+
             # one user for one review
-            edges.append((UPR[dp["review"]], UPR[dp["reviewerID"]]))
+            edges.append(edge_1)
             # one product for one review
-            edges.append(UPR[dp["review"]], UPR[dp["product"]])
-        return np.array(edges)
+            edges.append(edge_2)
+        return edges
+
+
+class GnnOut(NamedTuple):
+    raw: Tensor
+    pooler: Tensor
 
 
 class Gnn(Module):
@@ -156,7 +180,7 @@ class Gnn(Module):
         self.gnn2 = GCNConv(in_channels=2 * dims, out_channels=dims)
         self.relu = LeakyReLU()
 
-        self.output = Linear(in_features=dims, out_features=1)
+        self.pooler = Linear(in_features=dims, out_features=1)
 
     def forward(self, x: Tensor, edge_index: Tensor) -> Tensor:
         assert edge_index.shape[0] == 2
@@ -168,8 +192,8 @@ class Gnn(Module):
         z = self.gnn2(y, edge_index)
         z = self.relu(z)
 
-        a = self.output(z)
-        return a
+        a = self.pooler(z)
+        return GnnOut(z, a)
 
     @staticmethod
     def x_from_graph(graph: AmazonMyGraph):
@@ -182,18 +206,58 @@ class Gnn(Module):
         product_data = [graph.product(id) for id in product_ids]
         review_data = [graph.review(id) for id in review_ids]
 
-        user_embeddings = [
-            graph.sentence_transform(user_data[idx : idx + BATCH])
-            for idx in tqdm(range(0, len(user_data), BATCH))
-        ]
-        product_embeddings = [
-            graph.sentence_transform(product_data[idx : idx + BATCH])
-            for idx in tqdm(range(0, len(product_data), BATCH))
-        ]
-        review_embeddings = [
-            graph.sentence_transform(review_data[idx : idx + BATCH])
-            for idx in tqdm(range(0, len(review_data), BATCH))
-        ]
+        CACHE = {}
+        _CACHE_PATH = Path("embeddings.pkl")
+        if _CACHE_PATH.exists():
+            logger.warning("loading form embeddings.pkl")
+            with open(_CACHE_PATH, "rb") as f:
+                CACHE = pickle.load(f)
+
+        user_embeddings = (
+            CACHE["user"]
+            if CACHE
+            else np.concatenate(
+                [
+                    graph.sentence_transform(user_data[idx : idx + BATCH])
+                    for idx in tqdm(range(0, len(user_data), BATCH))
+                ],
+                axis=0,
+            )
+        )
+        product_embeddings = (
+            CACHE["product"]
+            if CACHE
+            else np.concatenate(
+                [
+                    graph.sentence_transform(product_data[idx : idx + BATCH])
+                    for idx in tqdm(range(0, len(product_data), BATCH))
+                ],
+                axis=0,
+            )
+        )
+        review_embeddings = (
+            CACHE["review"]
+            if CACHE
+            else np.concatenate(
+                [
+                    graph.sentence_transform(review_data[idx : idx + BATCH])
+                    for idx in tqdm(range(0, len(review_data), BATCH))
+                ],
+                axis=0,
+            )
+        )
+
+        logger.info(f"user embeddings: {user_embeddings.shape}")
+        logger.info(f"product embeddings: {product_embeddings.shape}")
+        logger.info(f"review embeddings: {review_embeddings.shape}")
+
+        if not _CACHE_PATH.exists():
+            CACHE["user"] = user_embeddings
+            CACHE["product"] = product_embeddings
+            CACHE["review"] = review_embeddings
+
+            with open(_CACHE_PATH, "wb+") as f:
+                pickle.dump(CACHE, f)
 
         user_emb_dim = user_embeddings.shape[1]
         product_emb_dim = product_embeddings.shape[1]
@@ -202,21 +266,21 @@ class Gnn(Module):
         user_embeddings = np.concatenate(
             [
                 user_embeddings,
-                np.zeros((1, product_emb_dim + review_emb_dim)),
+                np.zeros([user_embeddings.shape[0], product_emb_dim + review_emb_dim]),
             ],
             axis=1,
         )
         product_embeddings = np.concatenate(
             [
-                np.zeros(1, user_emb_dim),
+                np.zeros([product_embeddings.shape[0], user_emb_dim]),
                 product_embeddings,
-                np.zeros((1, review_emb_dim)),
+                np.zeros([product_embeddings.shape[0], review_emb_dim]),
             ],
             axis=1,
         )
         review_embeddings = np.concatenate(
             [
-                np.zeros(1, user_emb_dim + product_emb_dim),
+                np.zeros([review_embeddings.shape[0], user_emb_dim + product_emb_dim]),
                 review_embeddings,
             ],
             axis=1,
@@ -229,11 +293,21 @@ class Gnn(Module):
     def edge_index_from_graph(graph: AmazonMyGraph):
         edge_index = []
 
-        id_idx = {id: idx for idx, id in enumerate(graph.get_ids())}
+        ids = graph.get_ids()
+        id_set = set(ids)
+
+        assert len(ids) == len(set(ids)), {
+            "length": len(ids),
+            "reduced": len(set(ids)),
+        }
+
+        id_idx = {id: idx for idx, id in enumerate(ids)}
         edges = graph.edges()
         for x, y in edges:
-            x_idx = id_idx[x]
-            y_idx = id_idx[y]
+            assert x in id_set, x
+            assert y in id_set, y
+            x_idx = id_idx[str(x)]
+            y_idx = id_idx[str(y)]
 
             edge_index.append((x_idx, y_idx))
 
