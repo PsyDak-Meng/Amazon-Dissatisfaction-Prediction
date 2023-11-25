@@ -147,7 +147,7 @@ class AmazonMyGraph:
             + self._user_ids
             # + [self._products[product] for product in list(self._products.keys())]
             + list(self._products.values())
-            + [self._reviews[str(review_id)] for review_id in self._review_ids]
+            + list(self._reviews.values())
         )
         UPR = {upr: i for i, upr in enumerate(UPR_cat)}
 
@@ -197,14 +197,13 @@ class Gnn(Module):
 
     @staticmethod
     def x_from_graph(graph: AmazonMyGraph):
-        user_ids = graph.get_ids(types="user")
-        product_ids = graph.get_ids(types="product")
-        review_ids = graph.get_ids(types="review")
 
-        # embed by _ids orders
+       
+        user_ids = graph.get_ids(types="user")
         user_data = [graph.user(id) for id in user_ids]
-        product_data = [graph.product(id) for id in product_ids]
-        review_data = [graph.review(id) for id in review_ids]
+        product_data = graph.get_ids(types="product")
+        review_data = graph.get_ids(types="review")
+
 
         CACHE = {}
         _CACHE_PATH = Path("embeddings.pkl")
