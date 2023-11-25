@@ -164,8 +164,8 @@ class AmazonMyGraph:
             edges.append(edge_1)
             # one product for one review
             edges.append(edge_2)
-            scores.append(dp['score'])
-            scores.append(dp['score'])
+            scores.append(dp["score"])
+            scores.append(dp["score"])
         return edges, torch.Tensor(scores)
 
 
@@ -311,7 +311,7 @@ class Gnn(Module):
 
         #     edge_index.append((x_idx, y_idx))
         edges, scores = graph.edges()
-        return torch.tensor(edges).int().T.contiguous(), scores
+        return torch.tensor(edges).int().T.contiguous(), torch.tensor(scores)
 
 
 if __name__ == "__main__":
