@@ -123,10 +123,10 @@ class AmazonMyGraph:
         user_fn = lambda: self._user_ids
         # gets userNames from user_id
         product_fn = lambda: list(
-            self._products.keys()
-        )  # gets product names from products dict values
+            list(self._products.values())
+        )  # gets products from products dict values
         review_fn = lambda: [
-            str(i) for i in self._review_ids
+            list(self._reviews.values())
         ]  # gets reviews from review_id
         if types == None:
             return user_fn() + product_fn() + review_fn()
@@ -146,8 +146,8 @@ class AmazonMyGraph:
             []
             + self._user_ids
             # + [self._products[product] for product in list(self._products.keys())]
-            + list(self._products.keys())
-            + [self._reviews[str(review)] for review in self._review_ids]
+            + list(self._products.values())
+            + [self._reviews[str(review_id)] for review_id in self._review_ids]
         )
         UPR = {upr: i for i, upr in enumerate(UPR_cat)}
 
