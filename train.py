@@ -5,6 +5,7 @@ import os
 import hydra
 import torch
 from rich import print
+from sklearn.metrics import r2_score
 from tqdm import tqdm
 
 from gnn import AmazonMyGraph, Gnn
@@ -18,26 +19,34 @@ def main(cfg: dict):
     graph_file = cfg["graph"]
     graph = AmazonMyGraph(graph_file)
 
-    x = Gnn.x_from_graph(graph).to(DEVICE)
-    edge_index, scores = Gnn.edge_index_from_graph(graph)
-    edge_index = edge_index.to(DEVICE)
-    scores = scores.to(DEVICE)
+    x, scores = Gnn.x_from_graph(graph)
+    edge_index = Gnn.edge_index_from_graph(graph)
+    x = x.float().to(DEVICE)
+    edge_index = edge_index.int().to(DEVICE)
+    scores = scores.float().to(DEVICE)
     assert len(scores) == len(x), [len(scores), len(x)]
     is_review = scores >= 0
 
-    gnn = Gnn(x.shape[1]).to(DEVICE)
-    print(gnn)
-    optimizer = torch.optim.Adam(gnn.parameters(), lr=cfg["learning_rate"])
+    gnn = Gnn(x.shape[1], linear=cfg["linear"]).float().to(DEVICE)
+    optimizer = torch.optim.Adam(gnn.parameters(), lr=cfg["learning-rate"])
     loss_fn = torch.nn.MSELoss()
 
     for epoch in tqdm(range(cfg["epochs"])):
         out = gnn(x, edge_index)
-        loss.backward()
+        loss = loss_fn(out.pooler[is_review].squeeze(), scores[is_review])
+
         optimizer.zero_grad()
-        loss = loss_fn(out.pooler[is_review], scores[is_review])
+        loss.backward()
         optimizer.step()
-        print(out.raw.shape, out.pooler.shape)
-        # input()
+
+        print(
+            r2_score(
+                y_pred=out.pooler.detach()[is_review].cpu().numpy(),
+                y_true=scores.clone()[is_review].cpu().numpy(),
+            )
+        )
+
+    gnn.save(cfg["save-path"])
 
 
 if __name__ == "__main__":

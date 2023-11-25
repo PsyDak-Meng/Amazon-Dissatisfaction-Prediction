@@ -174,12 +174,16 @@ class GnnOut(NamedTuple):
 
 
 class Gnn(Module):
-    def __init__(self, dims: int) -> None:
+    def __init__(self, dims: int, linear: bool = False) -> None:
         super().__init__()
 
         self.gnn1 = GCNConv(in_channels=dims, out_channels=dims)
         self.gnn2 = GCNConv(in_channels=2 * dims, out_channels=dims)
-        self.relu = LeakyReLU()
+
+        if linear:
+            self.relu = lambda x: x
+        else:
+            self.relu = LeakyReLU(inplace=True)
 
         self.pooler = Linear(in_features=dims, out_features=1)
 
@@ -196,6 +200,16 @@ class Gnn(Module):
         a = self.pooler(z)
         return GnnOut(z, a)
 
+    def save(self, path: str):
+        self.cpu()
+        with open(path, "wb+") as f:
+            torch.save(self.state_dict(), f)
+
+    def load(self, path: str):
+        with open(path, "rb") as f:
+            self.load_state_dict(torch.load(path))
+        self.to(DEVICE)
+
     @staticmethod
     def x_from_graph(graph: AmazonMyGraph):
         user_ids = graph.get_ids(types="user")
@@ -205,13 +219,10 @@ class Gnn(Module):
         product_data = [graph.product(id) for id in product_ids]
         review_data = [graph.review(id) for id in review_ids]
 
-        scores = [float(graph.data[review_id]['score']) for review_id in review_ids]
+        scores = [float(graph.data[review_id]["score"]) for review_id in review_ids]
         scores = np.concatenate(
-            np.zeros(len(user_ids)),
-            np.zeros(len(product_ids)),
-            np.array(scores)
+            [np.zeros(len(user_ids)), np.zeros(len(product_ids)), np.array(scores)]
         )
-
 
         CACHE = {}
         _CACHE_PATH = Path("embeddings.pkl")
@@ -294,7 +305,7 @@ class Gnn(Module):
         )
 
         x = np.concatenate([user_embeddings, product_embeddings, review_embeddings])
-        return torch.from_numpy(x).float(), scores
+        return torch.from_numpy(x).float(), torch.tensor(scores)
 
     @staticmethod
     def edge_index_from_graph(graph: AmazonMyGraph):
