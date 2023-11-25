@@ -120,14 +120,13 @@ class AmazonMyGraph:
             print("Review ids:", dict(itertools.islice(self._reviews.items(), k)))
 
         # gets corresponding values to embed by _ids lists/_products dict values orders; KEEEP ORDER !!!
-        user_fn = lambda: self._user_ids
+        user_fn = lambda: list(self._user_ids)
         # gets userNames from user_id
-        product_fn = lambda: list(
-            list(self._products.values())
-        )  # gets products from products dict values
-        review_fn = lambda: [
-            list(self._reviews.values())
-        ]  # gets reviews from review_id
+        product_fn = lambda: list(self._products.values())
+        # gets products from products dict values
+        review_fn = lambda: list(self._reviews.values())
+        # gets reviews from review_id
+
         if types == None:
             return user_fn() + product_fn() + review_fn()
         elif types == "user":
@@ -197,13 +196,10 @@ class Gnn(Module):
 
     @staticmethod
     def x_from_graph(graph: AmazonMyGraph):
-
-       
         user_ids = graph.get_ids(types="user")
         user_data = [graph.user(id) for id in user_ids]
         product_data = graph.get_ids(types="product")
         review_data = graph.get_ids(types="review")
-
 
         CACHE = {}
         _CACHE_PATH = Path("embeddings.pkl")
