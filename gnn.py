@@ -170,7 +170,9 @@ class AmazonMyGraph:
 
 class GnnOut(NamedTuple):
     raw: Tensor
-    pooler: Tensor
+    pooler_score: Tensor
+    pooler_helpful: Tensor
+    pooler_good: Tensor
 
 
 class Gnn(Module):
@@ -197,8 +199,10 @@ class Gnn(Module):
         z = self.gnn2(y, edge_index)
         z = self.relu(z)
 
-        a = self.pooler(z)
-        return GnnOut(z, a)
+        s = self.pooler(z) #score
+        h = self.pooler(z) #helpful
+        g = self.pooler(z) #score
+        return GnnOut(z, s, h, g)
 
     def save(self, path: str):
         self.cpu()
@@ -212,6 +216,11 @@ class Gnn(Module):
 
     @staticmethod
     def x_from_graph(graph: AmazonMyGraph):
+        with open('helpfulness.json','r') as h:
+            helps = json.loads(h)
+        with open('goodness.json','r') as g:
+            goods = json.loads(g)
+
         user_ids = graph.get_ids(types="user")
         product_ids = graph.get_ids(types="product")
         review_ids = graph.get_ids(types="review")
@@ -220,8 +229,17 @@ class Gnn(Module):
         review_data = [graph.review(id) for id in review_ids]
 
         scores = [float(graph.data[review_id]["score"]) for review_id in review_ids]
+        helpfulness = [float(helps.get(review_id,np.nan)) for review_id in review_ids]
+        goodness = [float(goods.get(review_id,np.nan)) for review_id in review_ids]
+
         scores = np.concatenate(
             [np.zeros(len(user_ids)), np.zeros(len(product_ids)), np.array(scores)]
+        )
+        helpfulness = np.concatenate(
+            [np.zeros(len(user_ids)), np.zeros(len(product_ids)), np.array(helpfulness)]
+        )
+        goodness = np.concatenate(
+            [np.zeros(len(user_ids)), np.zeros(len(product_ids)), np.array(goodness)]
         )
 
         CACHE = {}
@@ -305,7 +323,7 @@ class Gnn(Module):
         )
 
         x = np.concatenate([user_embeddings, product_embeddings, review_embeddings])
-        return torch.from_numpy(x).float(), torch.tensor(scores)
+        return torch.from_numpy(x).float(), torch.tensor(scores),torch.tensor(helpfulness),torch.tensor(goodness)
 
     @staticmethod
     def edge_index_from_graph(graph: AmazonMyGraph):
@@ -337,7 +355,7 @@ if __name__ == "__main__":
     MyGraph.get_ids(k=3)
 
     logger.info("creating x")
-    x, scores = Gnn.x_from_graph(MyGraph)
+    x, scores, helpfulness, goodness = Gnn.x_from_graph(MyGraph)
     logger.info("creating edge")
     edge_index = Gnn.edge_index_from_graph(MyGraph)
     logger.info("creating gnn")

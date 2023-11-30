@@ -19,21 +19,29 @@ def main(cfg: dict):
     graph_file = cfg["graph"]
     graph = AmazonMyGraph(graph_file)
 
-    x, scores = Gnn.x_from_graph(graph)
+    x, scores, helpfulness, goodness = Gnn.x_from_graph(graph)
     edge_index = Gnn.edge_index_from_graph(graph)
     x = x.float().to(DEVICE)
     edge_index = edge_index.int().to(DEVICE)
     scores = scores.float().to(DEVICE)
     assert len(scores) == len(x), [len(scores), len(x)]
+    assert len(helpfulness) == len(x), [len(helpfulness), len(x)]
+    assert len(goodness) == len(x), [len(goodness), len(x)]
     is_review = scores >= 0
+    is_helpful = ~helpfulness.isnan()
+    is_good = ~goodness.isnan()
 
     gnn = Gnn(x.shape[1], linear=cfg["linear"]).float().to(DEVICE)
     optimizer = torch.optim.Adam(gnn.parameters(), lr=cfg["learning-rate"])
-    loss_fn = torch.nn.MSELoss()
+    loss_mse = torch.nn.MSELoss()
+    loss_ce = torch.nn.CrossEntropyLoss()
 
     for epoch in tqdm(range(cfg["epochs"])):
         out = gnn(x, edge_index)
-        loss = loss_fn(out.pooler[is_review].squeeze(), scores[is_review])
+        loss = 0
+        loss += loss_mse(out.pooler_score[is_review].squeeze(), scores[is_review])
+        loss += loss_ce(out.pooler_helpful[is_helpful].squeeze(), helpfulness[is_helpful])
+        loss += loss_ce(out.pooler_good[is_good].squeeze(), goodness[is_good])
 
         optimizer.zero_grad()
         loss.backward()
