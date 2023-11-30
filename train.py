@@ -21,9 +21,13 @@ def main(cfg: dict):
 
     x, scores, helpfulness, goodness = Gnn.x_from_graph(graph)
     edge_index = Gnn.edge_index_from_graph(graph)
+
     x = x.float().to(DEVICE)
     edge_index = edge_index.int().to(DEVICE)
     scores = scores.float().to(DEVICE)
+    helpfulness = helpfulness.float().to(DEVICE)
+    goodness = goodness.float().to(DEVICE)
+
     assert len(scores) == len(x), [len(scores), len(x)]
     assert len(helpfulness) == len(x), [len(helpfulness), len(x)]
     assert len(goodness) == len(x), [len(goodness), len(x)]
@@ -31,17 +35,22 @@ def main(cfg: dict):
     is_helpful = ~helpfulness.isnan()
     is_good = ~goodness.isnan()
 
+    helpfulness = torch.isclose(helpfulness, torch.ones_like(helpfulness)).float()
+    goodness = torch.isclose(goodness, torch.ones_like(goodness)).float()
+
     gnn = Gnn(x.shape[1], linear=cfg["linear"]).float().to(DEVICE)
     optimizer = torch.optim.Adam(gnn.parameters(), lr=cfg["learning-rate"])
     loss_mse = torch.nn.MSELoss()
-    loss_ce = torch.nn.CrossEntropyLoss()
+    loss_bce = torch.nn.BCEWithLogitsLoss()
 
     for epoch in tqdm(range(cfg["epochs"])):
         out = gnn(x, edge_index)
         loss = 0
         loss += loss_mse(out.pooler_score[is_review].squeeze(), scores[is_review])
-        loss += loss_ce(out.pooler_helpful[is_helpful].squeeze(), helpfulness[is_helpful])
-        loss += loss_ce(out.pooler_good[is_good].squeeze(), goodness[is_good])
+        loss += loss_bce(
+            out.pooler_helpful[is_helpful].squeeze(), helpfulness[is_helpful]
+        )
+        loss += loss_bce(out.pooler_good[is_good].squeeze(), goodness[is_good])
 
         optimizer.zero_grad()
         loss.backward()
@@ -49,7 +58,7 @@ def main(cfg: dict):
 
         print(
             r2_score(
-                y_pred=out.pooler.detach()[is_review].cpu().numpy(),
+                y_pred=out.pooler_score.detach()[is_review].cpu().numpy(),
                 y_true=scores.clone()[is_review].cpu().numpy(),
             )
         )
