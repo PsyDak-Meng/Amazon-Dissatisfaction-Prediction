@@ -218,9 +218,9 @@ class Gnn(Module):
     @staticmethod
     def x_from_graph(graph: AmazonMyGraph):
         with open("helpfulness.json", "r") as h:
-            helps = json.loads(h)
+            helps = json.load(h)
         with open("goodness.json", "r") as g:
-            goods = json.loads(g)
+            goods = json.load(g)
 
         user_ids = graph.get_ids(types="user")
         product_ids = graph.get_ids(types="product")
