@@ -8,6 +8,7 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Literal, NamedTuple, Protocol, Sequence
 
+import networkx as nx
 import numpy as np
 import torch
 from loguru import logger
@@ -166,6 +167,9 @@ class AmazonMyGraph:
             edges.append(edge_2)
 
         return edges
+
+    def graph(self):
+        return nx.from_edgelist(self.edges())
 
 
 class GnnOut(NamedTuple):
@@ -360,12 +364,29 @@ if __name__ == "__main__":
     MyGraph = AmazonMyGraph("Fashion_data.json")
     MyGraph.get_ids(k=3)
 
-    logger.info("creating x")
-    x, scores, helpfulness, goodness = Gnn.x_from_graph(MyGraph)
-    logger.info("creating edge")
-    edge_index = Gnn.edge_index_from_graph(MyGraph)
-    logger.info("creating gnn")
-    gnn = Gnn(dims=x.shape[1])
-    logger.info("gnn forward")
-    out = gnn(x=x, edge_index=edge_index)
-    print(out.shape, x.shape, edge_index.shape)
+    graph = MyGraph.graph()
+    print(graph, type(graph))
+
+    sets = sorted(nx.connected_components(graph), key=lambda s: len(s), reverse=True)
+    print(len(sets), [len(s) / sum(len(s) for s in sets) for s in sets[:20]])
+
+    first_set = []
+    second_set = []
+    for i, s in enumerate(sets):
+        if sum(len(i) for i in first_set) < sum(len(s) for s in sets) * 0.7:
+            first_set.append(s)
+        else:
+            second_set.append(s)
+
+    print(sum(len(i) for i in first_set) / sum(len(s) for s in sets))
+    print(sum(len(i) for i in second_set) / sum(len(s) for s in sets))
+
+    # logger.info("creating x")
+    # x, scores, helpfulness, goodness = Gnn.x_from_graph(MyGraph)
+    # logger.info("creating edge")
+    # edge_index = Gnn.edge_index_from_graph(MyGraph)
+    # logger.info("creating gnn")
+    # gnn = Gnn(dims=x.shape[1])
+    # logger.info("gnn forward")
+    # out = gnn(x=x, edge_index=edge_index)
+    # print(out.shape, x.shape, edge_index.shape)
