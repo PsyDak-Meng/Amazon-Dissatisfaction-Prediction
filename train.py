@@ -34,6 +34,7 @@ def main(cfg: dict):
     is_review = scores >= 0
     is_helpful = ~helpfulness.isnan()
     is_good = ~goodness.isnan()
+    is_train = torch.rand([len(is_review)]) < .7
 
     helpfulness = torch.isclose(helpfulness, torch.ones_like(helpfulness)).float()
     goodness = torch.isclose(goodness, torch.ones_like(goodness)).float()
@@ -46,7 +47,8 @@ def main(cfg: dict):
     for epoch in tqdm(range(cfg["epochs"])):
         out = gnn(x, edge_index)
         loss = 0
-        loss += loss_mse(out.pooler_score[is_review].squeeze(), scores[is_review])
+        loss += loss_mse(out.pooler_score[is_review & is_train].squeeze(), scores[is_review & is_train])
+        print(loss)
         loss += loss_bce(
             out.pooler_helpful[is_helpful].squeeze(), helpfulness[is_helpful]
         )
@@ -58,8 +60,8 @@ def main(cfg: dict):
 
         print(
             r2_score(
-                y_pred=out.pooler_score.detach()[is_review].cpu().numpy(),
-                y_true=scores.clone()[is_review].cpu().numpy(),
+                y_pred=out.pooler_score.detach()[is_review & ~is_train].cpu().numpy(),
+                y_true=scores.clone()[is_review & ~is_train].cpu().numpy(),
             )
         )
 
