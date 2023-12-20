@@ -1,5 +1,7 @@
-# DSN
-Data Science for Social Network Project on Amazon Dissatisfaction Detection using Graph Network &amp; Textual &amp; Image data.
+# Unveiling Graph Based Insights For Predicting Customer Dissatisfaction
+Data Science for Social Network Project on Amazon Dissatisfaction Prediction using Graph Network &amp; Textual &amp; Image data.<br>
+Our proposed method leverages user-product relation with a tripartite graph, then initializes user, product and review data using BERT and trains a GCN according to graph on supervised satisfaction scores. <br>
+![framework](tripartite.jpg)
 
 ## Preprocessing
 Run
