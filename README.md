@@ -1,6 +1,5 @@
 # Unveiling Graph Based Insights For Predicting Customer Dissatisfaction
-Data Science for Social Network Project on Amazon Dissatisfaction Prediction using Graph Network &amp; Textual &amp; Image data.<br>
-Our proposed method leverages user-product relation with a tripartite graph, then initializes user, product and review data using BERT and trains a GCN according to graph on supervised satisfaction scores. <br>
+Leveraging user-product relation with a tripartite graph, then initializes user, product and review data using BERT and trains a GCN according to graph on supervised satisfaction scores. <br>
 ![framework](tripartite.jpg)
 
 ## Preprocessing
@@ -29,7 +28,7 @@ product : Buxton Heiress Pik-Me-Up Framed Case<br>
 description : Authentic crunch leather with rich floral embossed logo heiress pik-me-up framed case features a large pocket, outside slip pocket and outside zipper pocket.       <br>
 meta : B u x t o nLeather Imported synthetic lining Flap closure Authentic Crunch Leather Rich Floral Embossed Logo Goldtone Hardware Large Snap Pocket You can return this item for any reason and get a full refund: no shipping charges. The item must be returned in new and unused condition. Read the full returns policy Go to Your Orders to start the return Print the return shipping label Ship it! Product Dimensions:5 x 6 x 2 inches Shipping Weight:0.8 ounces (View shipping rates and policies)
 
-## Training
+## Quick Start (Training)
 Simply run 
 ```
 python train.py epoch=???
